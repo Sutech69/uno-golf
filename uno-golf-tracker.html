@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>UNO Golf</title>
+<script>
+// Apply dark mode before paint to avoid flash
+(function(){
+  const s = localStorage.getItem('uno_dark');
+  const p = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (s === '1' || (s === null && p)) document.documentElement.classList.add('dark');
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,600;0,700;1,400&display=swap" rel="stylesheet">
 
@@ -68,6 +76,38 @@ window._googleSignOut = async () => {
   --red: #dc2626;
   --radius: 16px;
 }
+
+html.dark {
+  --g: #3a8a65;
+  --gl: #52a67c;
+  --gp: #1a3a2a;
+  --gm: #2d6a4f;
+  --gold: #d4a825;
+  --goldf: #f5d060;
+  --silver: #8a9bb0;
+  --bronze: #c47830;
+  --bg: #0f1117;
+  --card: #1a1d27;
+  --txt: #e8e6f0;
+  --muted: #8b909e;
+  --border: #2a2d3a;
+  --red: #f87171;
+}
+html.dark tbody tr:nth-child(even) td { background: #1f2230 !important; }
+html.dark tbody tr.cur td { background: #1a2e22 !important; }
+html.dark input[type="number"], html.dark input[type="text"] { background: #12151e; color: var(--txt); }
+html.dark .score-input { color: var(--txt); }
+html.dark .score-input:focus { background: #1a3a2a; }
+html.dark .user-menu { background: #1a1d27; }
+html.dark .login-card { background: #1a1d27; }
+html.dark .login-card h2 { color: var(--gl); }
+html.dark .login-card p { color: var(--muted); }
+html.dark .btn-google { background: #12151e; border-color: var(--border); color: var(--txt); }
+html.dark .btn-google:active { background: #1f2230; }
+html.dark .stat-card { box-shadow: none; }
+html.dark .card { box-shadow: 0 2px 16px rgba(0,0,0,0.35); }
+html.dark .menu-item:active { background: #1a3a2a; }
+html.dark .menu-item.danger:active { background: #2a1010; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body {
@@ -496,6 +536,9 @@ tbody tr.cur td { background: #edf7f1 !important; }
     <div class="user-menu-name" id="menu-name">–</div>
     <div class="user-menu-email" id="menu-email">–</div>
   </div>
+  <div class="menu-item" onclick="toggleDark()">
+    <span id="dark-icon">🌙</span> <span id="dark-label">Dark Mode</span>
+  </div>
   <div class="menu-item danger" onclick="doSignOut()">
     <span>🚪</span> Abmelden
   </div>
@@ -557,6 +600,21 @@ const COLORS  = ['#2d6a4f','#dc2626','#1d6fa4','#d97706','#7c3aed','#0891b2','#b
 const MEDALS  = ['🥇','🥈','🥉'];
 let game = null;
 let ats  = { games: [], ps: {} };
+
+// ── DARK MODE ────────────────────────────────────────────
+function applyDark(dark) {
+  document.documentElement.classList.toggle('dark', dark);
+  const icon  = document.getElementById('dark-icon');
+  const label = document.getElementById('dark-label');
+  if (icon)  icon.textContent  = dark ? '☀️' : '🌙';
+  if (label) label.textContent = dark ? 'Light Mode' : 'Dark Mode';
+}
+
+function toggleDark() {
+  const isDark = document.documentElement.classList.contains('dark');
+  localStorage.setItem('uno_dark', !isDark ? '1' : '0');
+  applyDark(!isDark);
+}
 
 // ── AUTH STATE HANDLER ───────────────────────────────────
 window._onAuthReady = (user) => {
@@ -946,6 +1004,11 @@ function esc(s) {
 
 // ── INIT ─────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
+  // Apply saved dark mode preference immediately
+  const savedDark = localStorage.getItem('uno_dark');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyDark(savedDark !== null ? savedDark === '1' : prefersDark);
+
   updatePNames();
   // If auth resolves before DOMContentLoaded, trigger manually
   if (window._user !== undefined && window._onAuthReady) {
