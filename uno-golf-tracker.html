@@ -369,6 +369,19 @@ tbody tr.cur td { background: #edf7f1 !important; }
 .hist-date { font-size: 11px; color: var(--muted); }
 .hist-detail { font-size: 11px; color: var(--muted); }
 
+.hist-row {
+  display: flex; align-items: center;
+  padding: 13px 16px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.15s; gap: 10px;
+}
+.hist-row:last-child { border-bottom: none; }
+.hist-row:active { background: var(--gp); }
+.hist-row-left { flex: 1; min-width: 0; }
+.hist-row-winner { font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; color: var(--g); margin-bottom: 3px; }
+.hist-row-meta { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.hist-row-scores { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist-row-arrow { font-size: 1.4rem; color: var(--border); flex-shrink: 0; }
+
 /* ── USER MENU ── */
 .user-menu-bg { display: none; position: fixed; inset: 0; z-index: 400; }
 .user-menu-bg.open { display: block; }
@@ -448,6 +461,7 @@ tbody tr.cur td { background: #edf7f1 !important; }
   <div class="tab active" onclick="showTab('setup')">Neues Spiel</div>
   <div class="tab" onclick="showTab('score')">Punkte</div>
   <div class="tab" onclick="showTab('stats')">Statistik</div>
+  <div class="tab" onclick="showTab('history')">Verlauf</div>
 </div>
 
 <!-- ══════════ TAB: SETUP ══════════ -->
@@ -530,6 +544,23 @@ tbody tr.cur td { background: #edf7f1 !important; }
   <div class="card" style="padding:0;">
     <div class="section-hdr"><div class="card-title">📋 Letzte Spiele</div></div>
     <div id="hist-list"><div class="empty"><span class="empty-icon">📋</span>Keine Historie.</div></div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: VERLAUF ══════════ -->
+<div class="page" id="tab-history">
+  <div id="hist-loading" class="card">
+    <div class="empty"><span class="empty-icon">⏳</span>Lade Spiele…</div>
+  </div>
+  <div id="hist-container"></div>
+</div>
+
+<!-- ══════════ GAME DETAIL MODAL ══════════ -->
+<div class="modal-bg" id="game-detail-modal" onclick="closeDetailOut(event)">
+  <div class="modal" id="game-detail-content">
+    <div class="modal-handle"></div>
+    <button class="modal-close" onclick="closeDetail()">×</button>
+    <div id="game-detail-inner"></div>
   </div>
 </div>
 
@@ -675,10 +706,11 @@ function showTab(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  ['setup','score','stats'].forEach((t, i) => {
+  ['setup','score','stats','history'].forEach((t, i) => {
     if (t === name) document.querySelectorAll('.tab')[i].classList.add('active');
   });
-  if (name === 'stats') renderStats();
+  if (name === 'stats')   renderStats();
+  if (name === 'history') renderHistory();
 }
 
 // ── SETUP ────────────────────────────────────────────────
@@ -951,20 +983,132 @@ async function endConfirmed() {
 async function loadATS() {
   if (!window._db) return;
   try {
-    const { collection, getDocs, query, where, orderBy, limit } = window._fbOps;
-    const gSnap = await getDocs(query(
-      collection(window._db, 'games'),
-      where('finished','==',true),
-      orderBy('finishedAt','desc'),
-      limit(30)
-    ));
-    const games = gSnap.docs.map(d => d.data());
+    const { collection, getDocs } = window._fbOps;
+    // Simple getDocs without compound query — no index needed, sort locally
+    const gSnap = await getDocs(collection(window._db, 'games'));
+    const games = gSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(g => g.finished)
+      .sort((a, b) => (b.finishedAt || '').localeCompare(a.finishedAt || ''));
     const pSnap = await getDocs(collection(window._db, 'playerStats'));
     const ps = {};
     pSnap.docs.forEach(d => { ps[d.data().name] = d.data(); });
     ats = { games, ps };
   } catch(e) { console.warn('loadATS error:', e); }
 }
+
+// ── HISTORY TAB ──────────────────────────────────────────
+async function renderHistory() {
+  const loading = document.getElementById('hist-loading');
+  const container = document.getElementById('hist-container');
+  loading.style.display = 'block';
+  container.innerHTML = '';
+
+  await loadATS();
+  loading.style.display = 'none';
+
+  const { games } = ats;
+  if (!games.length) {
+    container.innerHTML = '<div class="card"><div class="empty"><span class="empty-icon">📋</span>Noch keine abgeschlossenen Spiele.</div></div>';
+    return;
+  }
+
+  // Group by month
+  const byMonth = {};
+  games.forEach(g => {
+    const d = g.finishedAt ? new Date(g.finishedAt) : new Date(0);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const label = d.toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
+    if (!byMonth[key]) byMonth[key] = { label, games: [] };
+    byMonth[key].games.push(g);
+  });
+
+  let html = '';
+  Object.entries(byMonth).forEach(([, month]) => {
+    html += `<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);padding:4px 2px 8px;">${month.label}</div>`;
+    html += '<div class="card" style="padding:0;">';
+    month.games.forEach((g, gi) => {
+      const date   = g.finishedAt ? new Date(g.finishedAt).toLocaleDateString('de-AT',{day:'2-digit',month:'2-digit',year:'numeric'}) : '–';
+      const winner = g.ranked?.[0]?.name || '–';
+      const players = (g.players||[]).length;
+      const scores  = g.ranked ? g.ranked.map(r => `${esc(r.name)} ${r.total}`).join(' · ') : '';
+      html += `<div class="hist-row" onclick="openDetail('${g.id || gi}', ${JSON.stringify(g).replace(/'/g,"&#39;")})">
+        <div class="hist-row-left">
+          <div class="hist-row-winner">🏆 ${esc(winner)}</div>
+          <div class="hist-row-meta">${date} · ${players} Spieler · ${g.rounds} Runden</div>
+          <div class="hist-row-scores">${scores}</div>
+        </div>
+        <div class="hist-row-arrow">›</div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+  // store games map for detail view
+  window._histGames = {};
+  games.forEach((g, i) => { window._histGames[g.id || i] = g; });
+}
+
+function openDetail(id, gameData) {
+  const g = window._histGames?.[id] || gameData;
+  if (!g) return;
+
+  const date = g.finishedAt
+    ? new Date(g.finishedAt).toLocaleDateString('de-AT',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})
+    : '–';
+
+  // Reconstruct scores matrix from serialized form
+  const scores = g._scores
+    ? deserializeGame(g).scores
+    : (g.scores || []);
+
+  let scoreTableHtml = '';
+  if (scores.length && g.players) {
+    scoreTableHtml = '<div class="score-wrap" style="margin:12px 0;"><table>';
+    scoreTableHtml += '<thead><tr><th>R</th>';
+    g.players.forEach((p, i) => {
+      scoreTableHtml += `<th><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${COLORS[i]};margin-right:4px;vertical-align:middle;"></span>${esc(p)}</th>`;
+    });
+    scoreTableHtml += '</tr></thead><tbody>';
+    scores.forEach((row, r) => {
+      scoreTableHtml += `<tr><td>${r+1}</td>`;
+      row.forEach(v => { scoreTableHtml += `<td style="padding:8px 6px;">${v !== null ? v : '–'}</td>`; });
+      scoreTableHtml += '</tr>';
+    });
+    // totals
+    const totals = g.players.map((_, pi) =>
+      scores.reduce((s, row) => s + (row[pi] !== null ? Number(row[pi]) : 0), 0)
+    );
+    scoreTableHtml += '<tr class="totals-row"><td>∑</td>';
+    totals.forEach(t => { scoreTableHtml += `<td>${t}</td>`; });
+    scoreTableHtml += '</tr></tbody></table></div>';
+  }
+
+  // Podium for detail
+  const ranked = g.ranked || [];
+  const podiumHtml = ranked.length ? `
+    <div style="margin-bottom:14px;">
+      ${ranked.map((p, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">
+          <span style="font-family:'Fraunces',serif;font-size:1.1rem;width:26px;text-align:center;">${['🥇','🥈','🥉'][i] || (i+1)+'.'}</span>
+          <span style="flex:1;font-weight:500;">${esc(p.name)}</span>
+          <span style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:600;color:var(--g);">${p.total}</span>
+        </div>`).join('')}
+    </div>` : '';
+
+  document.getElementById('game-detail-inner').innerHTML = `
+    <div class="modal-title" style="font-size:1.1rem;">📋 Spieldetails</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${date} · ${(g.players||[]).length} Spieler</div>
+    ${podiumHtml}
+    ${scoreTableHtml}
+  `;
+
+  document.getElementById('game-detail-modal').classList.add('open');
+}
+
+function closeDetail() { document.getElementById('game-detail-modal').classList.remove('open'); }
+function closeDetailOut(e) { if (e.target === document.getElementById('game-detail-modal')) closeDetail(); }
 
 function renderStats() {
   loadATS().then(() => {
