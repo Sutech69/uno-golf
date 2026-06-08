@@ -490,7 +490,7 @@ tbody tr.cur td { background: #edf7f1 !important; }
         <div class="prog-bar-bg"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
       </div>
       <div style="padding:10px 16px; display:flex; gap:8px;">
-        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="saveGame()">💾 Speichern</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="saveGame(this)">💾 Speichern</button>
         <button class="btn btn-danger btn-sm" onclick="confirmEnd()">✕ Beenden</button>
       </div>
     </div>
@@ -844,13 +844,12 @@ function deserializeGame(data) {
 }
 
 // ── SAVE ─────────────────────────────────────────────────
-async function saveGame() {
+async function saveGame(btn) {
   if (!window._db || !window._user || !game) return;
   try {
     const { doc, setDoc } = window._fbOps;
     const ref = doc(window._db, 'users', window._user.uid, 'state', 'currentGame');
     await setDoc(ref, serializeGame(game));
-    const btn = event.target;
     const orig = btn.textContent;
     btn.textContent = '✓ Gespeichert';
     setTimeout(() => { btn.textContent = orig; }, 1800);
