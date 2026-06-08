@@ -423,6 +423,90 @@ tbody tr.cur td { background: #edf7f1 !important; }
 .action-bar .btn { flex: 1; }
 .empty { padding: 40px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 .empty-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; opacity: 0.45; }
+
+/* ── PLAYER ROSTER ── */
+.roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.roster-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  cursor: pointer; position: relative;
+}
+.roster-avatar {
+  width: 52px; height: 52px; border-radius: 50%;
+  object-fit: cover; border: 3px solid transparent;
+  transition: border-color 0.15s, transform 0.15s;
+  background: var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; font-weight: 600; color: white;
+  overflow: hidden; flex-shrink: 0;
+}
+.roster-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.roster-chip.selected .roster-avatar { border-color: var(--g); transform: scale(1.08); }
+.roster-check {
+  position: absolute; top: -2px; right: 2px;
+  background: var(--g); color: white; border-radius: 50%;
+  width: 18px; height: 18px; font-size: 10px;
+  display: none; align-items: center; justify-content: center;
+}
+.roster-chip.selected .roster-check { display: flex; }
+.roster-name { font-size: 10px; text-align: center; color: var(--txt); max-width: 68px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roster-add-btn {
+  width: 52px; height: 52px; border-radius: 50%;
+  border: 2px dashed var(--border); background: transparent;
+  cursor: pointer; font-size: 1.5rem; color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.roster-add-btn:active { background: var(--gp); border-color: var(--g); color: var(--g); }
+
+/* ── PLAYER POPUP ── */
+.popup-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55); z-index: 500;
+  align-items: flex-end; justify-content: center;
+}
+.popup-overlay.open { display: flex; }
+.popup {
+  background: var(--card); border-radius: 20px 20px 0 0;
+  padding: 20px 18px 32px; width: 100%;
+  max-height: 90vh; overflow-y: auto;
+  position: relative;
+}
+.popup-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 18px; }
+.popup-title { font-family: 'Fraunces', serif; font-size: 1.2rem; font-weight: 700; color: var(--g); margin-bottom: 18px; }
+.avatar-picker {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  margin-bottom: 20px;
+}
+.avatar-preview {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: var(--border); overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; font-weight: 700; color: white;
+  cursor: pointer; position: relative;
+}
+.avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-preview-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.35);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; opacity: 0; transition: opacity 0.2s;
+}
+.avatar-preview:active .avatar-preview-overlay { opacity: 1; }
+.avatar-hint { font-size: 11px; color: var(--muted); }
+.popup-actions { display: flex; gap: 10px; margin-top: 20px; }
+.popup-actions .btn { flex: 1; }
+.btn-ghost-danger {
+  background: transparent; color: var(--red);
+  border: none; font-family: 'DM Mono', monospace;
+  font-size: 13px; cursor: pointer; padding: 8px 0;
+  text-align: center; margin-top: 8px; width: 100%;
+}
+html.dark .roster-add-btn { border-color: var(--border); }
+html.dark .avatar-preview { background: #2a2d3a; }
 </style>
 </head>
 <body>
@@ -466,23 +550,34 @@ tbody tr.cur td { background: #edf7f1 !important; }
 
 <!-- ══════════ TAB: SETUP ══════════ -->
 <div class="page active" id="tab-setup">
+
+  <!-- Spielerliste -->
+  <div class="card">
+    <div class="card-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div class="card-title" style="margin:0;">👥 Spieler</div>
+        <div style="font-size:11px;color:var(--muted);" id="sel-count">0 ausgewählt</div>
+      </div>
+      <div class="roster-grid" id="roster-grid">
+        <div class="roster-chip" onclick="openPlayerPopup()">
+          <button class="roster-add-btn">+</button>
+          <div class="roster-name">Neu</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rundenanzahl -->
   <div class="card">
     <div class="card-body">
       <div class="card-title">⛳ Spielkonfiguration</div>
-      <div class="setup-row">
-        <div>
-          <label>Spieler</label>
-          <input type="number" id="p-count" min="2" max="8" value="4" inputmode="numeric" onchange="updatePNames()">
-        </div>
-        <div>
-          <label>Runden</label>
-          <input type="number" id="r-count" min="1" max="36" value="9" inputmode="numeric">
-        </div>
+      <div>
+        <label>Anzahl Runden</label>
+        <input type="number" id="r-count" min="1" max="36" value="9" inputmode="numeric">
       </div>
-      <label>Namen</label>
-      <div class="pname-list" id="pname-list"></div>
     </div>
   </div>
+
   <button class="btn btn-primary btn-full" onclick="startGame()">▶ Spiel starten</button>
 </div>
 
@@ -588,6 +683,33 @@ tbody tr.cur td { background: #edf7f1 !important; }
   </div>
 </div>
 
+<!-- ══════════ PLAYER POPUP ══════════ -->
+<div class="popup-overlay" id="player-popup" onclick="closePlayerPopupOut(event)">
+  <div class="popup">
+    <div class="popup-handle"></div>
+    <div class="popup-title" id="player-popup-title">Spieler hinzufügen</div>
+    <input type="hidden" id="player-popup-id">
+
+    <div class="avatar-picker">
+      <div class="avatar-preview" id="avatar-preview-btn" onclick="document.getElementById('avatar-file-input').click()">
+        <div id="avatar-preview-inner" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;color:white;">?</div>
+        <div class="avatar-preview-overlay">📷</div>
+      </div>
+      <div class="avatar-hint">Tippe um Foto zu wählen</div>
+      <input type="file" id="avatar-file-input" accept="image/*" style="display:none;" onchange="onAvatarFile(event)">
+    </div>
+
+    <label>Name</label>
+    <input type="text" id="player-popup-name" placeholder="Spielername" style="margin-bottom:8px;">
+
+    <div class="popup-actions">
+      <button class="btn btn-secondary" onclick="closePlayerPopup()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="savePlayer()">Speichern</button>
+    </div>
+    <button class="btn-ghost-danger" id="player-delete-btn" onclick="deletePlayer()" style="display:none;">Spieler löschen</button>
+  </div>
+</div>
+
 <!-- ══════════ USER MENU ══════════ -->
 <div class="user-menu-bg" id="user-menu-bg" onclick="closeUserMenu()">
 </div>
@@ -680,13 +802,12 @@ function toggleDark() {
 window._onAuthReady = (user) => {
   const loginScreen = document.getElementById('login-screen');
   if (user) {
-    // Signed in
     loginScreen.classList.remove('show');
     updateUserUI(user);
     loadCurrentGame();
     loadATS();
+    loadRoster();
   } else {
-    // Signed out — show login
     loginScreen.classList.add('show');
     updateUserUI(null);
   }
@@ -737,37 +858,192 @@ function showTab(name) {
   if (name === 'history') renderHistory();
 }
 
-// ── SETUP ────────────────────────────────────────────────
-function updatePNames() {
-  const n    = parseInt(document.getElementById('p-count').value) || 4;
-  const list = document.getElementById('pname-list');
-  const vals = Array.from(list.querySelectorAll('input')).map(i => i.value);
-  list.innerHTML = '';
-  for (let i = 0; i < n; i++) {
-    const row = document.createElement('div');
-    row.className = 'pname-row';
-    const dot = document.createElement('div');
-    dot.className = 'pname-dot';
-    dot.style.background = COLORS[i];
-    const inp = document.createElement('input');
-    inp.type = 'text';
-    inp.placeholder = 'Spieler ' + (i + 1);
-    inp.value = vals[i] || '';
-    row.appendChild(dot);
-    row.appendChild(inp);
-    list.appendChild(row);
+// ── ROSTER ───────────────────────────────────────────────
+let roster = [];         // [{id, name, photo}]
+let selectedPlayers = []; // ids of selected players
+
+async function loadRoster() {
+  if (!window._db || !window._user) return;
+  try {
+    const { collection, getDocs } = window._fbOps;
+    const snap = await getDocs(collection(window._db, 'users', window._user.uid, 'roster'));
+    roster = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    roster.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    renderRoster();
+  } catch(e) { console.warn('loadRoster error:', e); }
+}
+
+function renderRoster() {
+  const grid = document.getElementById('roster-grid');
+  const selEl = document.getElementById('sel-count');
+  if (!grid) return;
+
+  // Clamp selectedPlayers to max 8
+  if (selectedPlayers.length > 8) selectedPlayers = selectedPlayers.slice(0, 8);
+
+  let html = '';
+  roster.forEach(p => {
+    const sel = selectedPlayers.includes(p.id);
+    const avatarHtml = p.photo
+      ? `<img src="${p.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+      : `<span style="font-size:1.2rem;font-weight:700;">${avatarInitial(p.name)}</span>`;
+    const bg = p.photo ? 'background:#888;' : `background:${COLORS[roster.indexOf(p) % COLORS.length]};`;
+    html += `<div class="roster-chip${sel ? ' selected' : ''}">
+      <div class="roster-check">✓</div>
+      <div class="roster-avatar" style="${bg};position:relative;" onclick="togglePlayer('${p.id}')">${avatarHtml}</div>
+      <div style="display:flex;align-items:center;gap:3px;max-width:68px;">
+        <div class="roster-name" onclick="togglePlayer('${p.id}')" style="flex:1;">${esc(p.name)}</div>
+        <button onclick="event.stopPropagation();openPlayerPopup('${p.id}')"
+          style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:2px;flex-shrink:0;line-height:1;">✎</button>
+      </div>
+    </div>`;
+  });
+  // Add new button
+  html += `<div class="roster-chip" onclick="openPlayerPopup()">
+    <button class="roster-add-btn" style="width:52px;height:52px;">+</button>
+    <div class="roster-name">Neu</div>
+  </div>`;
+  grid.innerHTML = html;
+  selEl.textContent = selectedPlayers.length + ' ausgewählt';
+}
+
+function avatarInitial(name) {
+  return (name || '?').trim().split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function togglePlayer(id) {
+  const idx = selectedPlayers.indexOf(id);
+  if (idx >= 0) {
+    selectedPlayers.splice(idx, 1);
+  } else {
+    if (selectedPlayers.length >= 8) { alert('Maximal 8 Spieler pro Spiel.'); return; }
+    selectedPlayers.push(id);
+  }
+  renderRoster();
+}
+
+// ── PLAYER POPUP ─────────────────────────────────────────
+let _pendingAvatarB64 = null;
+
+function openPlayerPopup(playerId) {
+  _pendingAvatarB64 = null;
+  const popup = document.getElementById('player-popup');
+  const titleEl = document.getElementById('player-popup-title');
+  const nameEl  = document.getElementById('player-popup-name');
+  const idEl    = document.getElementById('player-popup-id');
+  const delBtn  = document.getElementById('player-delete-btn');
+
+  if (playerId) {
+    const p = roster.find(r => r.id === playerId);
+    if (!p) return;
+    titleEl.textContent = 'Spieler bearbeiten';
+    nameEl.value = p.name;
+    idEl.value   = p.id;
+    delBtn.style.display = 'block';
+    setAvatarPreview(p.photo || null, p.name);
+  } else {
+    titleEl.textContent = 'Spieler hinzufügen';
+    nameEl.value = '';
+    idEl.value   = '';
+    delBtn.style.display = 'none';
+    setAvatarPreview(null, '');
+  }
+  popup.classList.add('open');
+  setTimeout(() => nameEl.focus(), 300);
+}
+
+function setAvatarPreview(photoUrl, name) {
+  const inner = document.getElementById('avatar-preview-inner');
+  if (photoUrl) {
+    inner.innerHTML = `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  } else {
+    const initials = avatarInitial(name);
+    inner.innerHTML = initials || '?';
+    inner.style.background = COLORS[roster.length % COLORS.length];
   }
 }
 
+function onAvatarFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _pendingAvatarB64 = e.target.result;
+    setAvatarPreview(_pendingAvatarB64, document.getElementById('player-popup-name').value);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function savePlayer() {
+  const name = document.getElementById('player-popup-name').value.trim();
+  if (!name) { alert('Bitte einen Namen eingeben.'); return; }
+  if (!window._db || !window._user) return;
+
+  const id   = document.getElementById('player-popup-id').value;
+  const { doc, setDoc, collection, addDoc } = window._fbOps;
+  const photo = _pendingAvatarB64 !== null
+    ? _pendingAvatarB64
+    : (id ? (roster.find(r => r.id === id)?.photo || null) : null);
+
+  const data = { name, photo: photo || null };
+
+  try {
+    if (id) {
+      // Update existing
+      await setDoc(doc(window._db, 'users', window._user.uid, 'roster', id), data);
+      const idx = roster.findIndex(r => r.id === id);
+      if (idx >= 0) roster[idx] = { id, ...data };
+    } else {
+      // Create new
+      const ref = await addDoc(collection(window._db, 'users', window._user.uid, 'roster'), data);
+      roster.push({ id: ref.id, ...data });
+    }
+    roster.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    closePlayerPopup();
+    renderRoster();
+  } catch(e) { alert('Fehler beim Speichern: ' + e.message); }
+}
+
+async function deletePlayer() {
+  const id = document.getElementById('player-popup-id').value;
+  if (!id || !window._db || !window._user) return;
+  if (!confirm('Spieler wirklich löschen?')) return;
+  try {
+    const { doc, deleteDoc } = window._fbOps;
+    await deleteDoc(doc(window._db, 'users', window._user.uid, 'roster', id));
+    roster = roster.filter(r => r.id !== id);
+    selectedPlayers = selectedPlayers.filter(sid => sid !== id);
+    closePlayerPopup();
+    renderRoster();
+  } catch(e) { alert('Fehler beim Löschen: ' + e.message); }
+}
+
+function closePlayerPopup() {
+  document.getElementById('player-popup').classList.remove('open');
+  document.getElementById('avatar-file-input').value = '';
+  _pendingAvatarB64 = null;
+}
+
+function closePlayerPopupOut(e) {
+  if (e.target === document.getElementById('player-popup')) closePlayerPopup();
+}
+
+// ── GAME START ───────────────────────────────────────────
 function startGame() {
-  const n       = parseInt(document.getElementById('p-count').value) || 4;
-  const r       = parseInt(document.getElementById('r-count').value) || 9;
-  const inputs  = document.querySelectorAll('#pname-list input');
-  const players = Array.from(inputs).map((inp, i) => inp.value.trim() || ('Spieler ' + (i + 1)));
-  if (n < 2) { alert('Mindestens 2 Spieler!'); return; }
+  if (selectedPlayers.length < 2) { alert('Bitte mindestens 2 Spieler auswählen!'); return; }
+  const r = parseInt(document.getElementById('r-count').value) || 9;
+  const players = selectedPlayers.map(id => {
+    const p = roster.find(rp => rp.id === id);
+    return p ? p.name : id;
+  });
+  const playerPhotos = selectedPlayers.map(id => {
+    const p = roster.find(rp => rp.id === id);
+    return p?.photo || null;
+  });
+  const n = players.length;
 
   game = {
-    players, rounds: r,
+    players, playerPhotos, rounds: r,
     scores: Array.from({length: r}, () => new Array(n).fill(null)),
     startedAt: new Date().toISOString(),
     finished: false,
@@ -803,7 +1079,11 @@ function renderTable() {
   const curR = getCurRound();
   let html = '<thead><tr><th>R</th>';
   players.forEach((p, i) => {
-    html += `<th><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${COLORS[i]};margin-right:4px;vertical-align:middle;"></span>${esc(p)}</th>`;
+    const photo = game.playerPhotos?.[i];
+    const avatarHtml = photo
+      ? `<img src="${photo}" style="width:18px;height:18px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px;">`
+      : `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${COLORS[i]};margin-right:4px;vertical-align:middle;"></span>`;
+    html += `<th>${avatarHtml}${esc(p)}</th>`;
   });
   html += '</tr></thead><tbody>';
 
@@ -1150,17 +1430,22 @@ function renderStats() {
     document.getElementById('s-best-name').textContent = bestName;
 
     const entries = Object.values(ps).sort((a,b) =>
-      (a.totalScore/(a.games||1)) - (b.totalScore/(b.games||1))
+      (a.totalScore/(a.rounds||1)) - (b.totalScore/(b.rounds||1))
     );
     document.getElementById('lb-list').innerHTML = entries.length
       ? entries.map((s, i) => {
-          const avg  = (s.totalScore / (s.games||1)).toFixed(1);
+          const avgGame  = (s.totalScore / (s.games||1)).toFixed(1);
+          const avgRound = (s.totalScore / (s.rounds||1)).toFixed(1);
           const rc   = i===0?'gold':i===1?'silver':i===2?'bronze':'';
-          const init = (s.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
           const col  = COLORS[i % COLORS.length];
+          // Try to find player photo from roster
+          const rp   = roster.find(r => r.name === s.name);
+          const avatarHtml = rp?.photo
+            ? `<img src="${rp.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+            : `<span>${(s.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</span>`;
           return `<div class="lb-row">
             <div class="lb-rank ${rc}">${i+1}</div>
-            <div class="lb-avatar" style="background:${col}">${init}</div>
+            <div class="lb-avatar" style="background:${rp?.photo?'#888':col};overflow:hidden;">${avatarHtml}</div>
             <div class="lb-info">
               <div class="lb-name">${esc(s.name)}</div>
               <div class="lb-sub">${s.games} Spiele · ${s.rounds} Runden
@@ -1168,8 +1453,9 @@ function renderStats() {
               </div>
             </div>
             <div class="lb-right">
-              <div class="lb-avg">${avg}</div>
-              <div class="lb-avg-label">Ø Pkt.</div>
+              <div class="lb-avg">${avgRound}</div>
+              <div class="lb-avg-label">Ø / Runde</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:1px;">${avgGame} / Spiel</div>
             </div>
           </div>`;
         }).join('')
@@ -1249,16 +1535,10 @@ function esc(s) {
 
 // ── INIT ─────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  // Apply saved dark mode preference immediately
   const savedDark = localStorage.getItem('uno_dark');
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   applyDark(savedDark !== null ? savedDark === '1' : prefersDark);
-
-  updatePNames();
-  // If auth resolves before DOMContentLoaded, trigger manually
-  if (window._user !== undefined && window._onAuthReady) {
-    // already resolved — handled by onAuthStateChanged callback
-  }
+  renderRoster(); // show empty state with + button before auth
 });
 </script>
 </body>
