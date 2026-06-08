@@ -545,6 +545,9 @@ tbody tr.cur td { background: #edf7f1 !important; }
     <div class="section-hdr"><div class="card-title">📋 Letzte Spiele</div></div>
     <div id="hist-list"><div class="empty"><span class="empty-icon">📋</span>Keine Historie.</div></div>
   </div>
+  <div style="margin-top:8px;">
+    <button class="btn btn-danger btn-full" onclick="openDeleteConfirm()" style="opacity:0.75;">🗑 Alle Statistiken löschen</button>
+  </div>
 </div>
 
 <!-- ══════════ TAB: VERLAUF ══════════ -->
@@ -561,6 +564,27 @@ tbody tr.cur td { background: #edf7f1 !important; }
     <div class="modal-handle"></div>
     <button class="modal-close" onclick="closeDetail()">×</button>
     <div id="game-detail-inner"></div>
+  </div>
+</div>
+
+<!-- ══════════ DELETE CONFIRM MODAL ══════════ -->
+<div class="modal-bg" id="delete-modal">
+  <div class="modal" style="text-align:center;">
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="text-align:center;color:var(--red);">⚠️ Alles löschen?</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:6px;line-height:1.6;">
+      Alle Spiele und Spielerstatistiken werden <strong>unwiderruflich</strong> gelöscht.
+    </p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+      Tippe <strong>DELETE</strong> zur Bestätigung:
+    </p>
+    <input type="text" id="delete-confirm-input" placeholder="DELETE" autocomplete="off" autocorrect="off" autocapitalize="off"
+      style="text-align:center;margin-bottom:16px;letter-spacing:2px;"
+      oninput="checkDeleteInput()">
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-secondary" style="flex:1;" onclick="closeDeleteConfirm()">Abbrechen</button>
+      <button class="btn btn-danger" style="flex:1;opacity:0.4;pointer-events:none;" id="delete-confirm-btn" onclick="deleteAllStats()">Löschen</button>
+    </div>
   </div>
 </div>
 
@@ -1032,7 +1056,10 @@ async function renderHistory() {
       const winner = g.ranked?.[0]?.name || '–';
       const players = (g.players||[]).length;
       const scores  = g.ranked ? g.ranked.map(r => `${esc(r.name)} ${r.total}`).join(' · ') : '';
-      html += `<div class="hist-row" onclick="openDetail('${g.id || gi}', ${JSON.stringify(g).replace(/'/g,"&#39;")})">
+      const gKey = g.id || ('game_' + gi + '_' + month.label);
+      if (!window._histGames) window._histGames = {};
+      window._histGames[gKey] = g;
+      html += `<div class="hist-row" onclick="openDetail('${gKey}')">
         <div class="hist-row-left">
           <div class="hist-row-winner">🏆 ${esc(winner)}</div>
           <div class="hist-row-meta">${date} · ${players} Spieler · ${g.rounds} Runden</div>
@@ -1045,13 +1072,10 @@ async function renderHistory() {
   });
 
   container.innerHTML = html;
-  // store games map for detail view
-  window._histGames = {};
-  games.forEach((g, i) => { window._histGames[g.id || i] = g; });
 }
 
-function openDetail(id, gameData) {
-  const g = window._histGames?.[id] || gameData;
+function openDetail(id) {
+  const g = window._histGames?.[id];
   if (!g) return;
 
   const date = g.finishedAt
@@ -1169,6 +1193,48 @@ function renderStats() {
         }).join('')
       : '<div class="empty"><span class="empty-icon">📋</span>Keine Historie.</div>';
   });
+}
+
+// ── DELETE ALL STATS ─────────────────────────────────────
+function openDeleteConfirm() {
+  document.getElementById('delete-confirm-input').value = '';
+  document.getElementById('delete-confirm-btn').style.opacity = '0.4';
+  document.getElementById('delete-confirm-btn').style.pointerEvents = 'none';
+  document.getElementById('delete-modal').classList.add('open');
+}
+
+function closeDeleteConfirm() {
+  document.getElementById('delete-modal').classList.remove('open');
+}
+
+function checkDeleteInput() {
+  const val = document.getElementById('delete-confirm-input').value;
+  const btn = document.getElementById('delete-confirm-btn');
+  const ok  = val === 'DELETE';
+  btn.style.opacity = ok ? '1' : '0.4';
+  btn.style.pointerEvents = ok ? 'auto' : 'none';
+}
+
+async function deleteAllStats() {
+  closeDeleteConfirm();
+  if (!window._db) return;
+  try {
+    const { collection, getDocs, deleteDoc, doc } = window._fbOps;
+    // Delete all games
+    const gSnap = await getDocs(collection(window._db, 'games'));
+    await Promise.all(gSnap.docs.map(d => deleteDoc(doc(window._db, 'games', d.id))));
+    // Delete all playerStats
+    const pSnap = await getDocs(collection(window._db, 'playerStats'));
+    await Promise.all(pSnap.docs.map(d => deleteDoc(doc(window._db, 'playerStats', d.id))));
+
+    ats = { games: [], ps: {} };
+    renderStats();
+    // Also clear history tab if open
+    document.getElementById('hist-container').innerHTML = '<div class="card"><div class="empty"><span class="empty-icon">📋</span>Noch keine abgeschlossenen Spiele.</div></div>';
+    window._histGames = {};
+  } catch(e) {
+    alert('Fehler beim Löschen: ' + e.message);
+  }
 }
 
 // ── RULES MODAL ──────────────────────────────────────────
