@@ -730,7 +730,7 @@ async function loadCurrentGame() {
     const ref  = doc(window._db, 'users', window._user.uid, 'state', 'currentGame');
     const snap = await getDoc(ref);
     if (snap.exists()) {
-      game = snap.data();
+      game = deserializeGame(snap.data());
       renderTable();
     }
   } catch(e) {}
@@ -792,14 +792,20 @@ function getCurRound() {
 
 function onScore(r, p, val) {
   game.scores[r][p] = val === '' ? null : Number(val);
-  const totalCells = document.querySelectorAll('.totals-row td');
-  game.players.forEach((_, pi) => {
-    const tot = game.scores.reduce((s, row) => s + (row[pi] !== null ? Number(row[pi]) : 0), 0);
-    if (totalCells[pi + 1]) totalCells[pi + 1].textContent = tot;
-  });
-  updateProgress();
-  const allFilled = game.scores.every(row => row.every(v => v !== null));
-  document.getElementById('action-bar').style.display = allFilled ? 'flex' : 'none';
+  const roundComplete = game.scores[r].every(v => v !== null);
+  if (roundComplete) {
+    // Re-render entire table to unlock next round inputs
+    renderTable();
+  } else {
+    const totalCells = document.querySelectorAll('.totals-row td');
+    game.players.forEach((_, pi) => {
+      const tot = game.scores.reduce((s, row) => s + (row[pi] !== null ? Number(row[pi]) : 0), 0);
+      if (totalCells[pi + 1]) totalCells[pi + 1].textContent = tot;
+    });
+    updateProgress();
+    const allFilled = game.scores.every(row => row.every(v => v !== null));
+    document.getElementById('action-bar').style.display = allFilled ? 'flex' : 'none';
+  }
 }
 
 function updateProgress() {
@@ -812,13 +818,38 @@ function updateProgress() {
   document.getElementById('prog-bar').style.width  = pct + '%';
 }
 
+// ── FIRESTORE SERIALIZATION (no nested arrays) ───────────
+function serializeGame(g) {
+  const flat = {};
+  g.scores.forEach((row, r) => {
+    row.forEach((val, p) => {
+      flat['s_' + r + '_' + p] = val;
+    });
+  });
+  return { ...g, scores: null, _scores: flat, _rows: g.scores.length, _cols: g.scores[0].length };
+}
+
+function deserializeGame(data) {
+  if (!data._scores) return data; // legacy: already array form
+  const rows = data._rows, cols = data._cols;
+  const scores = Array.from({length: rows}, (_, r) =>
+    Array.from({length: cols}, (_, p) => {
+      const v = data._scores['s_' + r + '_' + p];
+      return v === undefined ? null : v;
+    })
+  );
+  const g = { ...data, scores };
+  delete g._scores; delete g._rows; delete g._cols;
+  return g;
+}
+
 // ── SAVE ─────────────────────────────────────────────────
 async function saveGame() {
   if (!window._db || !window._user || !game) return;
   try {
     const { doc, setDoc } = window._fbOps;
     const ref = doc(window._db, 'users', window._user.uid, 'state', 'currentGame');
-    await setDoc(ref, game);
+    await setDoc(ref, serializeGame(game));
     const btn = event.target;
     const orig = btn.textContent;
     btn.textContent = '✓ Gespeichert';
@@ -844,7 +875,7 @@ async function finishGame() {
     try {
       const { collection, addDoc, doc, deleteDoc, setDoc, getDoc } = window._fbOps;
       // Save completed game to global games collection
-      await addDoc(collection(window._db, 'games'), { ...game });
+      await addDoc(collection(window._db, 'games'), serializeGame(game));
       // Delete current game state
       await deleteDoc(doc(window._db, 'users', window._user.uid, 'state', 'currentGame'));
       // Update player stats
